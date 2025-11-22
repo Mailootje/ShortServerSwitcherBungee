@@ -49,13 +49,11 @@ public class ServerSwitchCommand extends Command {
             return;
         }
 
+        // Your custom message only
         send(player, cfg.msg("switching").replace("{server}", target));
 
-        // YOUR required dispatch style:
-        // send <player name that ran the command> <server>
-        ProxyServer.getInstance().getPluginManager()
-                .dispatchCommand(ProxyServer.getInstance().getConsole(),
-                        "send " + player.getName() + " " + target);
+        // Connect directly (no "Summoned by CONSOLE" message)
+        player.connect(ProxyServer.getInstance().getServerInfo(target));
     }
 
     private void send(CommandSender sender, String msg) {
