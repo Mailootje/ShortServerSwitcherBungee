@@ -1,0 +1,25 @@
+auto-register: true
+
+global-permission: "shortswitch.use"
+
+messages:
+  no-permission: "&cYou don’t have permission to use this command."
+  player-only: "&cOnly players can use this command."
+  unknown-server: "&cThat server is not available."
+  switching: "&7Sending you to &a{server}&7..."
+  reloaded: "&aConfig reloaded."
+  help:
+    - "&bShortServerSwitcherBungee"
+    - "&7/switcher help &f- show this help"
+    - "&7/switcher reload &f- reload config"
+
+commands:
+  smp:
+    server: "smp"
+    permission: "shortswitch.smp"
+    aliases: ["survival", "s"]
+
+  lobby:
+    server: "lobby"
+    permission: "shortswitch.lobby"
+    aliases: ["hub", "spawn"]
