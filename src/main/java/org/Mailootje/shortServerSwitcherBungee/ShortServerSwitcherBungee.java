@@ -1,6 +1,7 @@
 package org.Mailootje.shortServerSwitcherBungee;
 
 import net.md_5.bungee.api.ProxyServer;
+import net.md_5.bungee.api.plugin.Listener;
 import net.md_5.bungee.api.plugin.Plugin;
 
 import java.util.HashMap;
@@ -11,54 +12,60 @@ public class ShortServerSwitcherBungee extends Plugin {
 
     private ConfigManager configManager;
 
-    // commandName -> command instance
-    private final Map<String, ServerSwitchCommand> registered = new HashMap<>();
-
-    // cooldowns: player -> (commandKey -> lastUseMillis)
-    private final Map<UUID, Map<String, Long>> cooldowns = new HashMap<>();
-
-    // rate limit: player -> limiter
-    private final Map<UUID, RateLimiter> rateLimiters = new HashMap<>();
+    private final Map<String, ServerSwitchCommand> registered = new HashMap<String, ServerSwitchCommand>();
+    private final Map<UUID, Map<String, Long>> cooldowns = new HashMap<UUID, Map<String, Long>>();
+    private final Map<UUID, RateLimiter> rateLimiters = new HashMap<UUID, RateLimiter>();
 
     private QueueManager queueManager;
+    private ConfirmManager confirmManager;
+    private LangManager langManager;
 
     @Override
     public void onEnable() {
         this.configManager = new ConfigManager(this);
         configManager.load();
 
-        this.queueManager = new QueueManager(this);
+        this.langManager = new LangManager(this);
+        langManager.loadLanguages();
 
-        // admin/help command
+        this.queueManager = new QueueManager(this);
+        this.confirmManager = new ConfirmManager(this);
+
         ProxyServer.getInstance().getPluginManager()
                 .registerCommand(this, new SwitcherCommand(this));
-
-        // leave queue command (optional)
         ProxyServer.getInstance().getPluginManager()
                 .registerCommand(this, new LeaveQueueCommand(this));
+
+        ProxyServer.getInstance().getPluginManager()
+                .registerListener(this, (Listener) new ProxyJoinListener(this));
 
         registerShortCommands();
 
         queueManager.start();
+        confirmManager.start();
 
-        getLogger().info("ShortServerSwitcherBungee enabled. Loaded "
-                + configManager.getCommands().size() + " short commands.");
+        getLogger().info("ShortServerSwitcherBungee enabled.");
     }
 
     @Override
     public void onDisable() {
         unregisterShortCommands();
         if (queueManager != null) queueManager.stop();
-        getLogger().info("ShortServerSwitcherBungee disabled.");
+        if (confirmManager != null) confirmManager.stop();
     }
 
     public void reloadPlugin() {
         unregisterShortCommands();
         configManager.load();
+        langManager.loadLanguages();
         registerShortCommands();
         if (queueManager != null) {
             queueManager.stop();
             queueManager.start();
+        }
+        if (confirmManager != null) {
+            confirmManager.stop();
+            confirmManager.start();
         }
     }
 
@@ -69,10 +76,8 @@ public class ShortServerSwitcherBungee extends Plugin {
             String cmdName = entry.getKey().toLowerCase();
             ConfigManager.CommandDef def = entry.getValue();
 
-            // main command
             registerOne(cmdName, def);
 
-            // aliases
             if (def.aliases != null) {
                 for (String alias : def.aliases) {
                     if (alias == null || alias.trim().isEmpty()) continue;
@@ -97,25 +102,33 @@ public class ShortServerSwitcherBungee extends Plugin {
         registered.clear();
     }
 
-    // ===== cooldown helpers =====
     public long getLastUse(UUID uuid, String key) {
-        return cooldowns.getOrDefault(uuid, new HashMap<>()).getOrDefault(key, 0L);
+        Map<String, Long> map = cooldowns.get(uuid);
+        if (map == null) return 0L;
+        Long v = map.get(key);
+        return v == null ? 0L : v;
     }
 
     public void setLastUse(UUID uuid, String key, long time) {
-        cooldowns.computeIfAbsent(uuid, k -> new HashMap<>()).put(key, time);
+        Map<String, Long> map = cooldowns.get(uuid);
+        if (map == null) {
+            map = new HashMap<String, Long>();
+            cooldowns.put(uuid, map);
+        }
+        map.put(key, time);
     }
 
-    // ===== rate limit helpers =====
     public RateLimiter limiter(UUID uuid) {
-        return rateLimiters.computeIfAbsent(uuid, k -> new RateLimiter());
+        RateLimiter r = rateLimiters.get(uuid);
+        if (r == null) {
+            r = new RateLimiter();
+            rateLimiters.put(uuid, r);
+        }
+        return r;
     }
 
-    public ConfigManager getConfigManager() {
-        return configManager;
-    }
-
-    public QueueManager getQueueManager() {
-        return queueManager;
-    }
+    public ConfigManager getConfigManager() { return configManager; }
+    public QueueManager getQueueManager() { return queueManager; }
+    public ConfirmManager getConfirmManager() { return confirmManager; }
+    public LangManager getLangManager() { return langManager; }
 }

@@ -1,14 +1,10 @@
 auto-register: true
-
-# Global permission needed for all short commands (leave "" to disable)
 global-permission: "shortswitch.use"
 
-# Auto-generate per-command permissions if permission is empty
 auto-permissions:
   enabled: true
-  prefix: "shortswitch."   # /smp -> shortswitch.smp
+  prefix: "shortswitch."
 
-# Cooldowns in seconds per command key (aliases share same cooldown)
 cooldowns:
   enabled: true
   bypass-permission: "shortswitch.bypass.cooldown"
@@ -17,7 +13,6 @@ cooldowns:
     smp: 3
     lobby: 1
 
-# Rate limiting / anti-bot switching
 rate-limit:
   enabled: true
   bypass-permission: "shortswitch.bypass.ratelimit"
@@ -25,7 +20,6 @@ rate-limit:
   per-seconds: 10
   block-seconds: 30
 
-# Full server handling + queue
 full-servers:
   enabled: true
   bypass-permission: "shortswitch.bypass.full"
@@ -34,39 +28,99 @@ queue:
   enabled: true
   check-interval-seconds: 5
   max-wait-seconds: 300
-  # optional command to leave queue
+  grace-seconds: 120          # (14) keep spot after disconnect
   leave-command: "leavequeue"
 
-# Failover / priority list (first available wins)
+  # (1) priority tiers
+  tiers:
+    staff:
+      permission: "shortswitch.queue.staff"
+      priority: 100
+    vip:
+      permission: "shortswitch.queue.vip"
+      priority: 50
+    default:
+      priority: 0
+
+  # (2) actionbar updates
+  status:
+    enabled: true
+    interval-seconds: 10
+    actionbar: "&7Queue &a{server}&7: &b#{pos}&7 (&f{ahead} ahead&7)"
+
+# (4) auto-route on join
+auto-route:
+  enabled: true
+  default-command: "lobby"  # uses your short command key
+  if-full-queue: true
+  bypass-permission: "shortswitch.bypass.autoroute"
+
+# (5) smart selection by player count
+smart-select:
+  enabled: true
+  mode: "least-players"
+  candidates:
+    smp: ["smp", "smp2", "smp3"]
+    lobby: ["lobby", "lobby2"]
+
+# classic failover still supported (used if smart-select disabled)
 failover:
   lobby: ["lobby", "lobby2", "lobby_backup"]
   smp: ["smp", "smp2"]
 
+# (7) confirmation click for selected short-command keys
+confirm:
+  enabled: true
+  timeout-seconds: 10
+  commands: ["hardcore", "event"]
+
+# (12) multi-language
+lang:
+  default: "en"
+  per-permission:
+    "shortswitch.lang.nl": "nl"
+
 messages:
-  no-permission: "&cYou don’t have permission to use this command."
-  player-only: "&cOnly players can use this command."
+  no-permission: "&cYou don’t have permission."
+  player-only: "&cPlayers only."
   unknown-server: "&cThat server is not available."
   already-there: "&eYou are already on &a{server}&e."
   switching: "&7Sending you to &a{server}&7..."
   full: "&e{server} &7is full."
-  queued: "&7Server &a{server}&7 is full. You are now in queue. Position: &b{pos}&7."
+  queued: "&7{server} is full. You are queued. Position: &b{pos}&7."
   queue-left: "&aYou left the queue."
   queue-timeout: "&cQueue timed out for &e{server}&c."
-  ratelimited: "&cYou are switching too fast. Try again in {seconds}s."
+  ratelimited: "&cToo fast. Try again in {seconds}s."
+  confirm: "&eClick to confirm joining &a{server}&e."
+  confirm-expired: "&cConfirmation expired."
+  maintenance: "&c{server} is under maintenance."
   reloaded: "&aConfig reloaded."
   help:
     - "&bShortServerSwitcherBungee"
-    - "&7/switcher help &f- show this help"
-    - "&7/switcher reload &f- reload config"
-    - "&7/{leavequeue} &f- leave current queue"
+    - "&7/switcher help"
+    - "&7/switcher reload"
+    - "&7/{leavequeue} - leave queue"
 
 commands:
   smp:
     server: "smp"
-    permission: ""                 # auto-permissions -> shortswitch.smp
+    permission: ""                 # auto => shortswitch.smp
     aliases: ["survival", "s"]
+    enabled: true
+    motd: "&aWelcome to SMP!"
+    allow-permission: "shortswitch.smp"  # (6) only allow these perms
 
   lobby:
     server: "lobby"
-    permission: ""                 # auto-permissions -> shortswitch.lobby
-    aliases: ["hub", "spawn"]
+    permission: ""
+    aliases: ["hub"]
+    enabled: true
+    motd: "&bWelcome to the Lobby!"
+    allow-permission: ""             # empty => no extra gate
+
+  hardcore:
+    server: "hardcore"
+    aliases: ["hc"]
+    enabled: true
+    motd: "&cHardcore mode. Be careful!"
+    allow-permission: "shortswitch.hardcore"

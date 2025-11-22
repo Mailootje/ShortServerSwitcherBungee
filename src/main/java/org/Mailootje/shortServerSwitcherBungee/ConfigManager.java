@@ -26,7 +26,7 @@ public class ConfigManager {
     public boolean cooldownEnabled;
     public String cooldownBypassPerm;
     public int cooldownDefault;
-    public Map<String, Integer> cooldownPerCommand = new HashMap<>();
+    public Map<String, Integer> cooldownPerCommand = new HashMap<String, Integer>();
 
     // rate limit
     public boolean rateEnabled;
@@ -42,22 +42,60 @@ public class ConfigManager {
     public boolean queueEnabled;
     public int queueCheckInterval;
     public int queueMaxWait;
+    public int queueGraceSeconds;
     public String queueLeaveCommand;
 
-    // failover
-    public Map<String, List<String>> failover = new HashMap<>();
+    // queue tiers
+    public static class QueueTier {
+        public String permission;
+        public int priority;
+    }
+    public Map<String, QueueTier> queueTiers = new LinkedHashMap<String, QueueTier>();
 
-    private Map<String, String> messages = new HashMap<>();
-    private List<String> helpLines = new ArrayList<>();
+    // queue status
+    public boolean queueStatusEnabled;
+    public int queueStatusInterval;
+    public String queueStatusActionbar;
+
+    // auto-route
+    public boolean autoRouteEnabled;
+    public String autoRouteDefaultCommand;
+    public boolean autoRouteIfFullQueue;
+    public String autoRouteBypassPerm;
+
+    // smart select
+    public boolean smartSelectEnabled;
+    public String smartSelectMode;
+    public Map<String, List<String>> smartCandidates = new HashMap<String, List<String>>();
+
+    // failover
+    public Map<String, List<String>> failover = new HashMap<String, List<String>>();
+
+    // confirm
+    public boolean confirmEnabled;
+    public int confirmTimeoutSeconds;
+    public Set<String> confirmCommands = new HashSet<String>();
+
+    // language
+    public String defaultLang;
+    public Map<String, String> langByPermission = new HashMap<String, String>();
+
+    private Map<String, String> messages = new HashMap<String, String>();
+    private List<String> helpLines = new ArrayList<String>();
 
     public static class CommandDef {
         public String server;
         public String permission;
         public List<String> aliases;
-        public String key; // main key for cooldown/perm grouping
+        public String key;
+
+        // v3 extras
+        public boolean enabled = true;
+        public String motd = "";
+        public String allowPermission = "";
     }
 
-    private final Map<String, CommandDef> commands = new LinkedHashMap<>();
+    private final Map<String, CommandDef> commands = new LinkedHashMap<String, CommandDef>();
 
     public ConfigManager(ShortServerSwitcherBungee plugin) {
         this.plugin = plugin;
@@ -81,8 +119,8 @@ public class ConfigManager {
 
             // auto-perms
             Configuration ap = config.getSection("auto-permissions");
-            this.autoPermsEnabled = ap != null && ap.getBoolean("enabled", true);
-            this.autoPermPrefix = ap != null ? ap.getString("prefix", "shortswitch.") : "shortswitch.";
+            autoPermsEnabled = ap != null && ap.getBoolean("enabled", true);
+            autoPermPrefix = ap != null ? ap.getString("prefix", "shortswitch.") : "shortswitch.";
 
             // cooldowns
             Configuration cd = config.getSection("cooldowns");
@@ -107,16 +145,68 @@ public class ConfigManager {
             ratePerSeconds = rl != null ? rl.getInt("per-seconds", 10) : 10;
             rateBlockSeconds = rl != null ? rl.getInt("block-seconds", 30) : 30;
 
-            // full / queue
+            // full
             Configuration fs = config.getSection("full-servers");
             fullEnabled = fs != null && fs.getBoolean("enabled", true);
             fullBypassPerm = fs != null ? fs.getString("bypass-permission", "shortswitch.bypass.full") : "";
 
+            // queue
             Configuration q = config.getSection("queue");
             queueEnabled = q != null && q.getBoolean("enabled", false);
             queueCheckInterval = q != null ? q.getInt("check-interval-seconds", 5) : 5;
             queueMaxWait = q != null ? q.getInt("max-wait-seconds", 300) : 300;
+            queueGraceSeconds = q != null ? q.getInt("grace-seconds", 0) : 0;
             queueLeaveCommand = q != null ? q.getString("leave-command", "leavequeue") : "leavequeue";
+
+            // tiers
+            queueTiers.clear();
+            if (q != null) {
+                Configuration tiers = q.getSection("tiers");
+                if (tiers != null) {
+                    for (String t : tiers.getKeys()) {
+                        Configuration one = tiers.getSection(t);
+                        if (one == null) continue;
+                        QueueTier tier = new QueueTier();
+                        tier.permission = one.getString("permission", "");
+                        tier.priority = one.getInt("priority", 0);
+                        queueTiers.put(t.toLowerCase(), tier);
+                    }
+                }
+            }
+
+            // queue status
+            queueStatusEnabled = false;
+            queueStatusInterval = 10;
+            queueStatusActionbar = "";
+            if (q != null) {
+                Configuration st = q.getSection("status");
+                if (st != null) {
+                    queueStatusEnabled = st.getBoolean("enabled", false);
+                    queueStatusInterval = st.getInt("interval-seconds", 10);
+                    queueStatusActionbar = st.getString("actionbar", "");
+                }
+            }
+
+            // auto-route
+            Configuration ar = config.getSection("auto-route");
+            autoRouteEnabled = ar != null && ar.getBoolean("enabled", false);
+            autoRouteDefaultCommand = ar != null ? ar.getString("default-command", "") : "";
+            autoRouteIfFullQueue = ar != null && ar.getBoolean("if-full-queue", true);
+            autoRouteBypassPerm = ar != null ? ar.getString("bypass-permission", "shortswitch.bypass.autoroute") : "";
+
+            // smart select
+            Configuration ss = config.getSection("smart-select");
+            smartSelectEnabled = ss != null && ss.getBoolean("enabled", false);
+            smartSelectMode = ss != null ? ss.getString("mode", "least-players") : "least-players";
+            smartCandidates.clear();
+            if (ss != null) {
+                Configuration cand = ss.getSection("candidates");
+                if (cand != null) {
+                    for (String k : cand.getKeys()) {
+                        smartCandidates.put(k.toLowerCase(), cand.getStringList(k));
+                    }
+                }
+            }
 
             // failover
             failover.clear();
@@ -124,6 +214,30 @@ public class ConfigManager {
             if (fo != null) {
                 for (String key : fo.getKeys()) {
                     failover.put(key.toLowerCase(), fo.getStringList(key));
+                }
+            }
+
+            // confirm
+            Configuration cf = config.getSection("confirm");
+            confirmEnabled = cf != null && cf.getBoolean("enabled", false);
+            confirmTimeoutSeconds = cf != null ? cf.getInt("timeout-seconds", 10) : 10;
+            confirmCommands.clear();
+            if (cf != null) {
+                for (String ckey : cf.getStringList("commands")) {
+                    confirmCommands.add(ckey.toLowerCase());
+                }
+            }
+
+            // lang
+            Configuration lang = config.getSection("lang");
+            defaultLang = lang != null ? lang.getString("default", "en") : "en";
+            langByPermission.clear();
+            if (lang != null) {
+                Configuration pp = lang.getSection("per-permission");
+                if (pp != null) {
+                    for (String perm : pp.getKeys()) {
+                        langByPermission.put(perm, pp.getString(perm, defaultLang));
+                    }
                 }
             }
 
@@ -151,6 +265,9 @@ public class ConfigManager {
                     def.server = one.getString("server", "");
                     def.permission = one.getString("permission", "");
                     def.aliases = one.getStringList("aliases");
+                    def.enabled = one.getBoolean("enabled", true);
+                    def.motd = one.getString("motd", "");
+                    def.allowPermission = one.getString("allow-permission", "");
 
                     if (def.server == null || def.server.trim().isEmpty()) {
                         plugin.getLogger().warning("Command '" + key + "' skipped: no server set.");
@@ -176,7 +293,6 @@ public class ConfigManager {
 
     public String msg(String key) { return messages.getOrDefault(key, ""); }
     public List<String> getHelpLines() { return helpLines == null ? Collections.emptyList() : helpLines; }
-
     public Map<String, CommandDef> getCommands() { return commands; }
 
     public int cooldownFor(String key) {
@@ -187,5 +303,18 @@ public class ConfigManager {
         List<String> list = failover.get(key.toLowerCase());
         if (list == null || list.isEmpty()) return Collections.singletonList(baseServer);
         return list;
+    }
+
+    public List<String> smartFor(String key, String baseServer) {
+        List<String> list = smartCandidates.get(key.toLowerCase());
+        if (list == null || list.isEmpty()) return Collections.singletonList(baseServer);
+        return list;
+    }
+
+    public String langForPerms(Collection<String> playerPerms) {
+        for (Map.Entry<String, String> e : langByPermission.entrySet()) {
+            if (playerPerms.contains(e.getKey())) return e.getValue();
+        }
+        return defaultLang;
     }
 }
