@@ -5,6 +5,7 @@ import net.md_5.bungee.api.plugin.Plugin;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 public class ShortServerSwitcherBungee extends Plugin {
 
@@ -13,16 +14,32 @@ public class ShortServerSwitcherBungee extends Plugin {
     // commandName -> command instance
     private final Map<String, ServerSwitchCommand> registered = new HashMap<>();
 
+    // cooldowns: player -> (commandKey -> lastUseMillis)
+    private final Map<UUID, Map<String, Long>> cooldowns = new HashMap<>();
+
+    // rate limit: player -> limiter
+    private final Map<UUID, RateLimiter> rateLimiters = new HashMap<>();
+
+    private QueueManager queueManager;
+
     @Override
     public void onEnable() {
         this.configManager = new ConfigManager(this);
         configManager.load();
 
-        // main admin/help command
+        this.queueManager = new QueueManager(this);
+
+        // admin/help command
         ProxyServer.getInstance().getPluginManager()
                 .registerCommand(this, new SwitcherCommand(this));
 
+        // leave queue command (optional)
+        ProxyServer.getInstance().getPluginManager()
+                .registerCommand(this, new LeaveQueueCommand(this));
+
         registerShortCommands();
+
+        queueManager.start();
 
         getLogger().info("ShortServerSwitcherBungee enabled. Loaded "
                 + configManager.getCommands().size() + " short commands.");
@@ -31,6 +48,7 @@ public class ShortServerSwitcherBungee extends Plugin {
     @Override
     public void onDisable() {
         unregisterShortCommands();
+        if (queueManager != null) queueManager.stop();
         getLogger().info("ShortServerSwitcherBungee disabled.");
     }
 
@@ -38,6 +56,10 @@ public class ShortServerSwitcherBungee extends Plugin {
         unregisterShortCommands();
         configManager.load();
         registerShortCommands();
+        if (queueManager != null) {
+            queueManager.stop();
+            queueManager.start();
+        }
     }
 
     private void registerShortCommands() {
@@ -75,7 +97,25 @@ public class ShortServerSwitcherBungee extends Plugin {
         registered.clear();
     }
 
+    // ===== cooldown helpers =====
+    public long getLastUse(UUID uuid, String key) {
+        return cooldowns.getOrDefault(uuid, new HashMap<>()).getOrDefault(key, 0L);
+    }
+
+    public void setLastUse(UUID uuid, String key, long time) {
+        cooldowns.computeIfAbsent(uuid, k -> new HashMap<>()).put(key, time);
+    }
+
+    // ===== rate limit helpers =====
+    public RateLimiter limiter(UUID uuid) {
+        return rateLimiters.computeIfAbsent(uuid, k -> new RateLimiter());
+    }
+
     public ConfigManager getConfigManager() {
         return configManager;
+    }
+
+    public QueueManager getQueueManager() {
+        return queueManager;
     }
 }

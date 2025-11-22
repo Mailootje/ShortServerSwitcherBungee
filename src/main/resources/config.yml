@@ -1,25 +1,72 @@
 auto-register: true
 
+# Global permission needed for all short commands (leave "" to disable)
 global-permission: "shortswitch.use"
+
+# Auto-generate per-command permissions if permission is empty
+auto-permissions:
+  enabled: true
+  prefix: "shortswitch."   # /smp -> shortswitch.smp
+
+# Cooldowns in seconds per command key (aliases share same cooldown)
+cooldowns:
+  enabled: true
+  bypass-permission: "shortswitch.bypass.cooldown"
+  default-seconds: 0
+  per-command:
+    smp: 3
+    lobby: 1
+
+# Rate limiting / anti-bot switching
+rate-limit:
+  enabled: true
+  bypass-permission: "shortswitch.bypass.ratelimit"
+  max-switches: 5
+  per-seconds: 10
+  block-seconds: 30
+
+# Full server handling + queue
+full-servers:
+  enabled: true
+  bypass-permission: "shortswitch.bypass.full"
+
+queue:
+  enabled: true
+  check-interval-seconds: 5
+  max-wait-seconds: 300
+  # optional command to leave queue
+  leave-command: "leavequeue"
+
+# Failover / priority list (first available wins)
+failover:
+  lobby: ["lobby", "lobby2", "lobby_backup"]
+  smp: ["smp", "smp2"]
 
 messages:
   no-permission: "&cYou don’t have permission to use this command."
   player-only: "&cOnly players can use this command."
   unknown-server: "&cThat server is not available."
+  already-there: "&eYou are already on &a{server}&e."
   switching: "&7Sending you to &a{server}&7..."
+  full: "&e{server} &7is full."
+  queued: "&7Server &a{server}&7 is full. You are now in queue. Position: &b{pos}&7."
+  queue-left: "&aYou left the queue."
+  queue-timeout: "&cQueue timed out for &e{server}&c."
+  ratelimited: "&cYou are switching too fast. Try again in {seconds}s."
   reloaded: "&aConfig reloaded."
   help:
     - "&bShortServerSwitcherBungee"
     - "&7/switcher help &f- show this help"
     - "&7/switcher reload &f- reload config"
+    - "&7/{leavequeue} &f- leave current queue"
 
 commands:
   smp:
     server: "smp"
-    permission: "shortswitch.smp"
+    permission: ""                 # auto-permissions -> shortswitch.smp
     aliases: ["survival", "s"]
 
   lobby:
     server: "lobby"
-    permission: "shortswitch.lobby"
+    permission: ""                 # auto-permissions -> shortswitch.lobby
     aliases: ["hub", "spawn"]

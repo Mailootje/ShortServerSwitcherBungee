@@ -8,6 +8,7 @@ import net.md_5.bungee.api.plugin.Command;
 public class SwitcherCommand extends Command {
 
     private final ShortServerSwitcherBungee plugin;
+    private final String adminPerm = "shortswitch.admin";
 
     public SwitcherCommand(ShortServerSwitcherBungee plugin) {
         super("switcher", null, "switcherreload", "switcherhelp");
@@ -20,20 +21,23 @@ public class SwitcherCommand extends Command {
 
         if (args.length == 0 || args[0].equalsIgnoreCase("help")) {
             for (String line : cfg.getHelpLines()) {
-                send(sender, line);
+                send(sender, line.replace("{leavequeue}", cfg.queueLeaveCommand));
             }
             return;
         }
 
         if (args[0].equalsIgnoreCase("reload")) {
+            if (!sender.hasPermission(adminPerm)) {
+                send(sender, cfg.msg("no-permission"));
+                return;
+            }
             plugin.reloadPlugin();
             send(sender, cfg.msg("reloaded"));
             return;
         }
 
-        // unknown subcommand -> help
         for (String line : cfg.getHelpLines()) {
-            send(sender, line);
+            send(sender, line.replace("{leavequeue}", cfg.queueLeaveCommand));
         }
     }
 
